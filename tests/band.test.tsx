@@ -27,3 +27,19 @@ test('progress band draws on every surface', async ($, on) => {
     await ui.unmount()
   }
 })
+
+test('usage pane draws on every surface', async ($, on) => {
+  on('clock.now', () => ({ value: Date.parse('2026-11-09T00:00:00Z') }))
+  on('state.get', () => ({
+    value: { value: [{ kind: 'seven_day', percentUsed: 49, resetsAt: '2026-11-10T00:00:00Z' }], version: 1 },
+  }))
+  for (const surface of ['terminal', 'desktop', 'vscode', 'mobile'] as const) {
+    const ui = await $.ui.mount({
+      plugin: 'usage-band', component: 'Pane', requestId: 'usage-band', surface,
+      props: { title: 'Usage', isFocused: false, bodyColumns: 40, placement: 'dock', scroll: { offset: 0, bodyRows: 20 }, view: {} },
+    })
+    expect((await ui.find({ type: 'Text', text: /^51%$/ }))?.text).toBe('51%')
+    expect(await ui.find({ type: 'Text', text: /⏲1d0h/ })).toBeTruthy()
+    await ui.unmount()
+  }
+})

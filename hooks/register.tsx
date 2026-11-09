@@ -70,6 +70,13 @@ function textBar(r: Row, width = 10): string {
   return cells.join('')
 }
 
+// One-line text version with character bars, for footers and command output
+function textLine(rs: Row[]): string {
+  return rs
+    .map(r => `${r.name} ${textBar(r)} ${r.left}%${r.until ? ` ⏲${r.until}` : ''}${r.fast ? ' ⚡' : ''}`)
+    .join('   ')
+}
+
 async function refresh($: EngineInterface, list?: readonly Limit[]) {
   const got = list ?? (await $.session.usage()).rateLimits
   await update($, limits, () => got.map((l: Limit) => ({ ...l })))
@@ -77,12 +84,65 @@ async function refresh($: EngineInterface, list?: readonly Limit[]) {
   $.ui.status(text || undefined)
 }
 
+const PANE = 'usage-band'
+
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const r = await next(e)
     await $.command.register({ name: 'usage-raw', description: 'Show raw rate-limit windows' })
+    await $.command.register({ name: 'usage-pane', description: 'Open the usage pane' })
+    void $.ui.open({ id: PANE, title: 'Usage' })
     await refresh($)
     return r
+  })
+
+  on('command.run', { command: 'usage-pane' }, async $ => {
+    const { isPlaced } = await $.ui.open({ id: PANE, title: 'Usage' })
+    await refresh($)
+    if (isPlaced) return { text: 'Usage pane opened.' }
+    const line = textLine(rows(await read($, limits), await $.clock.now()))
+    return { text: line || 'No usage data yet — send a message.' }
+  })
+
+  // Side pane: one block per window, full-width bars
+  on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
+    const { Box, Text } = $.ui.resolve(e)
+    const rs = rows(await read($, limits), await $.clock.now())
+    if (rs.length === 0) return <Text dimColor>No usage data yet — send a message.</Text>
+
+    if (e.surface === 'terminal') {
+      return (
+        <Box flexDirection="column">
+          {rs.map(r => (
+            <Box key={r.name} gap={1}>
+              <Text dimColor>{r.name}</Text>
+              <Text color={r.color}>{textBar(r, 16)}</Text>
+              <Text color={r.color}>{r.left}%</Text>
+              {r.until ? <Text dimColor>⏲{r.until}</Text> : null}
+              {r.fast ? <Text color="warning">⚡</Text> : null}
+            </Box>
+          ))}
+        </Box>
+      )
+    }
+
+    return (
+      <Box flexDirection="column" gap="md" padding="sm">
+        {rs.map(r => (
+          <Box key={r.name} flexDirection="column" gap="xs">
+            <Box gap="sm">
+              <Text bold>{r.name}</Text>
+              <Text bold color={r.color}>{r.left}%</Text>
+              {r.until ? <Text dimColor>⏲{r.until}</Text> : null}
+              {r.fast ? <Text color="warning">⚡</Text> : null}
+            </Box>
+            <Box width="100%" height={6} backgroundColor="inactive">
+              <Box width={`${r.left}%`} height={6} backgroundColor={r.color} />
+            </Box>
+          </Box>
+        ))}
+      </Box>
+    )
   })
 
   on('command.run', { command: 'usage-raw' }, async $ => {
@@ -96,10 +156,14 @@ export const register: Register = on => {
     return next(e)
   })
 
+  // Footer under each main reply: shown on every client, including ones that
+  // draw neither the band above the prompt nor panes.
   on('turn.complete', async ($, e, next) => {
     const r = await next(e)
     await refresh($)
-    return r
+    if (e.agentId !== undefined) return r
+    const line = textLine(rows(await read($, limits), await $.clock.now()))
+    return line ? { ...r, text: line } : r
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {

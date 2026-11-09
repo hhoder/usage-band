@@ -11,7 +11,8 @@ A Claude Code mod that keeps your remaining plan usage and reset countdowns in v
 - `│` is a time cursor: how much of the window has elapsed. `⚡` appears when usage runs more than 10 points ahead of elapsed time.
 - `⏲` is the countdown to reset.
 - Shown above the prompt (slim bars on desktop / mobile / VS Code, character bars in the terminal) and mirrored in the status line.
-- `/usage-raw` prints the raw rate-limit windows.
+- Also a **Usage** side pane where the client supports panes, and a one-line usage footer under each reply (the only spot some clients, such as the desktop app viewing a cloud session, draw — it may appear folded as a notification).
+- `/usage-pane` opens the pane, or prints the usage line where panes aren't supported. `/usage-raw` prints the raw rate-limit windows.
 
 Data refreshes at session start, after every turn, and whenever a window moves a whole point. It appears after the session's first response.
 
