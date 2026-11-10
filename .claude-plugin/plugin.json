@@ -1,1 +1,1 @@
-{ "name": "usage-band", "version": "0.2.0", "description": "Remaining usage bars and reset countdowns above the prompt", "license": "MIT", "types": "./types/index.d.ts" }
+{ "name": "usage-band", "version": "0.3.0", "description": "Remaining usage bars and reset countdowns above the prompt", "license": "MIT", "types": "./types/index.d.ts" }

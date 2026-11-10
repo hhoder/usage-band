@@ -18,7 +18,7 @@ test('progress band draws on every surface', async ($, on) => {
       version: 1,
     },
   }))
-  for (const surface of ['terminal', 'desktop', 'vscode', 'mobile'] as const) {
+  for (const surface of ['desktop', 'vscode', 'mobile'] as const) {
     const ui = await $.ui.mount({ ...BAND, surface })
     expect((await ui.find({ type: 'Text', text: /^40%$/ }))?.text).toBe('40%')
     expect(await ui.find({ type: 'Text', text: /⚡/ })).toBeTruthy()

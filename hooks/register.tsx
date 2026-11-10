@@ -81,7 +81,9 @@ async function refresh($: EngineInterface, list?: readonly Limit[]) {
   const got = list ?? (await $.session.usage()).rateLimits
   await update($, limits, () => got.map((l: Limit) => ({ ...l })))
   const text = statusText(rows(got, await $.clock.now()))
-  $.ui.status(text || undefined)
+  // Status line only where a non-terminal client is attached
+  const gui = (await $.session.surfaces()).some(x => x !== 'terminal')
+  $.ui.status(gui && text ? text : undefined)
 }
 
 const PANE = 'usage-band'
@@ -91,7 +93,7 @@ export const register: Register = on => {
     const r = await next(e)
     await $.command.register({ name: 'usage-raw', description: 'Show raw rate-limit windows' })
     await $.command.register({ name: 'usage-pane', description: 'Open the usage pane' })
-    void $.ui.open({ id: PANE, title: 'Usage' })
+    if ((await $.session.surfaces()).some(x => x !== 'terminal')) void $.ui.open({ id: PANE, title: 'Usage' })
     await refresh($)
     return r
   })
@@ -162,32 +164,18 @@ export const register: Register = on => {
     const r = await next(e)
     await refresh($)
     if (e.agentId !== undefined) return r
+    if (!(await $.session.surfaces()).some(x => x !== 'terminal')) return r
     const line = textLine(rows(await read($, limits), await $.clock.now()))
     return line ? { ...r, text: line } : r
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     const list = await read($, limits)
-    if (e.props.hasSurvey || list.length === 0) return next(e)
+    // Desktop-only: the terminal gets nothing
+    if (e.surface === 'terminal' || e.props.hasSurvey || list.length === 0) return next(e)
 
     const rs = rows(list, await $.clock.now())
     const { Box, Text } = $.ui.resolve(e)
-
-    if (e.surface === 'terminal') {
-      return (
-        <Box gap={2}>
-          {rs.map(r => (
-            <Box key={r.name} gap={1}>
-              <Text dimColor>{r.name}</Text>
-              <Text color={r.color}>{textBar(r)}</Text>
-              <Text color={r.color}>{r.left}%</Text>
-              {r.until ? <Text dimColor>⏲{r.until}</Text> : null}
-              {r.fast ? <Text color="warning">⚡</Text> : null}
-            </Box>
-          ))}
-        </Box>
-      )
-    }
 
     // Graphical surfaces: one compact row, a slim bar per window
     return (
