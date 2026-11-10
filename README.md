@@ -7,11 +7,10 @@ A Claude Code mod for the **Claude desktop app** that keeps your remaining plan 
 ```
 
 - One bar per rate-limit window the API reports (`5h`, `7d`, and any others such as a per-model weekly window). A window that isn't reported for your plan is simply not drawn.
-- Color by remaining: green > 50%, yellow 20–50%, red < 20%.
 - `│` is a time cursor: how much of the window has elapsed. `⚡` appears when usage runs more than 10 points ahead of elapsed time.
 - `⏲` is the countdown to reset.
-- Shown above the prompt as slim bars in graphical clients (desktop app, VS Code, mobile) and mirrored in the status line. The terminal shows nothing.
-- Also a **Usage** side pane where the client supports panes, and a one-line usage footer under each reply (the only spot some clients, such as the desktop app viewing a cloud session, draw — it may appear folded as a notification).
+- Shown above the prompt as one plain line of character bars (no colors) in graphical clients (desktop app, VS Code, mobile) and mirrored in the status line. The terminal shows nothing.
+- A **Usage** side pane (same line, opened only by `/usage-pane`), and a one-line usage footer under each reply (the only spot some clients, such as the desktop app viewing a cloud session, draw — it may appear folded as a notification).
 - `/usage-pane` opens the pane, or prints the usage line where panes aren't supported. `/usage-raw` prints the raw rate-limit windows.
 
 Data refreshes at session start, after every turn, and whenever a window moves a whole point. It appears after the session's first response.

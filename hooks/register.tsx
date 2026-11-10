@@ -77,13 +77,16 @@ function textLine(rs: Row[]): string {
     .join('   ')
 }
 
+// Desktop app only: true when the session draws on any surface other than the terminal
+async function inApp($: EngineInterface): Promise<boolean> {
+  return (await $.session.surfaces()).some(s => s !== 'terminal')
+}
+
 async function refresh($: EngineInterface, list?: readonly Limit[]) {
   const got = list ?? (await $.session.usage()).rateLimits
   await update($, limits, () => got.map((l: Limit) => ({ ...l })))
   const text = statusText(rows(got, await $.clock.now()))
-  // Status line only where a non-terminal client is attached
-  const gui = (await $.session.surfaces()).some(x => x !== 'terminal')
-  $.ui.status(gui && text ? text : undefined)
+  $.ui.status((await inApp($)) ? text || undefined : undefined)
 }
 
 const PANE = 'usage-band'
@@ -93,7 +96,6 @@ export const register: Register = on => {
     const r = await next(e)
     await $.command.register({ name: 'usage-raw', description: 'Show raw rate-limit windows' })
     await $.command.register({ name: 'usage-pane', description: 'Open the usage pane' })
-    if ((await $.session.surfaces()).some(x => x !== 'terminal')) void $.ui.open({ id: PANE, title: 'Usage' })
     await refresh($)
     return r
   })
@@ -106,45 +108,13 @@ export const register: Register = on => {
     return { text: line || 'No usage data yet — send a message.' }
   })
 
-  // Side pane: one block per window, full-width bars
+  // Side pane (only via /usage-pane): same one-line character bars as the band
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    const { Box, Text } = $.ui.resolve(e)
+    const { Text } = $.ui.resolve(e)
     const rs = rows(await read($, limits), await $.clock.now())
     if (rs.length === 0) return <Text dimColor>No usage data yet — send a message.</Text>
 
-    if (e.surface === 'terminal') {
-      return (
-        <Box flexDirection="column">
-          {rs.map(r => (
-            <Box key={r.name} gap={1}>
-              <Text dimColor>{r.name}</Text>
-              <Text color={r.color}>{textBar(r, 16)}</Text>
-              <Text color={r.color}>{r.left}%</Text>
-              {r.until ? <Text dimColor>⏲{r.until}</Text> : null}
-              {r.fast ? <Text color="warning">⚡</Text> : null}
-            </Box>
-          ))}
-        </Box>
-      )
-    }
-
-    return (
-      <Box flexDirection="column" gap="md" padding="sm">
-        {rs.map(r => (
-          <Box key={r.name} flexDirection="column" gap="xs">
-            <Box gap="sm">
-              <Text bold>{r.name}</Text>
-              <Text bold color={r.color}>{r.left}%</Text>
-              {r.until ? <Text dimColor>⏲{r.until}</Text> : null}
-              {r.fast ? <Text color="warning">⚡</Text> : null}
-            </Box>
-            <Box width="100%" height={6} backgroundColor="inactive">
-              <Box width={`${r.left}%`} height={6} backgroundColor={r.color} />
-            </Box>
-          </Box>
-        ))}
-      </Box>
-    )
+    return <Text>{textLine(rs)}</Text>
   })
 
   on('command.run', { command: 'usage-raw' }, async $ => {
@@ -158,40 +128,22 @@ export const register: Register = on => {
     return next(e)
   })
 
-  // Footer under each main reply: shown on every client, including ones that
-  // draw neither the band above the prompt nor panes.
+  // Footer under each main reply, desktop app only (skipped in a terminal-only session).
   on('turn.complete', async ($, e, next) => {
     const r = await next(e)
     await refresh($)
-    if (e.agentId !== undefined) return r
-    if (!(await $.session.surfaces()).some(x => x !== 'terminal')) return r
+    if (e.agentId !== undefined || !(await inApp($))) return r
     const line = textLine(rows(await read($, limits), await $.clock.now()))
     return line ? { ...r, text: line } : r
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     const list = await read($, limits)
-    // Desktop-only: the terminal gets nothing
     if (e.surface === 'terminal' || e.props.hasSurvey || list.length === 0) return next(e)
 
     const rs = rows(list, await $.clock.now())
-    const { Box, Text } = $.ui.resolve(e)
+    const { Text } = $.ui.resolve(e)
 
-    // Graphical surfaces: one compact row, a slim bar per window
-    return (
-      <Box gap="md" paddingX="sm">
-        {rs.map(r => (
-          <Box key={r.name} gap="xs">
-            <Text dimColor>{r.name}</Text>
-            <Box width={64} height={6} backgroundColor="inactive">
-              <Box width={`${r.left}%`} height={6} backgroundColor={r.color} />
-            </Box>
-            <Text color={r.color}>{r.left}%</Text>
-            {r.until ? <Text dimColor>⏲{r.until}</Text> : null}
-            {r.fast ? <Text color="warning">⚡</Text> : null}
-          </Box>
-        ))}
-      </Box>
-    )
+    return <Text>{textLine(rs)}</Text>
   })
 }
