@@ -44,3 +44,20 @@ test('usage pane is one text line on every surface', async ($, on) => {
     await ui.unmount()
   }
 })
+
+test('usage line sits under the latest reply only', async ($, on) => {
+  on('clock.now', () => ({ value: Date.parse('2026-11-09T00:00:00Z') }))
+  on('state.get', (_, e: any) => {
+    const key = e?.key ?? e?.ref?.key
+    if (key === 'lastReply') return { value: { value: 'Hello there.\n\nLast block.', version: 1 } }
+    return { value: { value: [{ kind: 'seven_day', percentUsed: 49, resetsAt: '2026-11-10T00:00:00Z' }], version: 1 } }
+  })
+  for (const surface of ['desktop', 'mobile'] as const) {
+    const latest = await $.ui.mount({ plugin: 'usage-band', component: 'AssistantMessage', surface, props: { text: 'Last block.', isFirstOfReply: false } })
+    expect(await latest.find({ type: 'Text', text: /51%/ })).toBeTruthy()
+    await latest.unmount()
+    const old = await $.ui.mount({ plugin: 'usage-band', component: 'AssistantMessage', surface, props: { text: 'An older reply.', isFirstOfReply: true } })
+    expect(await old.find({ type: 'Text', text: /51%/ })).toBeFalsy()
+    await old.unmount()
+  }
+})

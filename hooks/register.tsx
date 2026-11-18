@@ -8,6 +8,9 @@ import type { Limit } from '../types'
 
 const limits = atom({ plugin: 'usage-band', key: 'limits' } as const, [] as Limit[])
 
+// Text of the latest main reply, so the usage line is drawn under that reply alone
+const lastReply = atom({ plugin: 'usage-band', key: 'lastReply' } as const, '')
+
 const WINDOWS: Record<string, { name: string; ms?: number }> = {
   five_hour: { name: '5h', ms: 5 * 3600_000 },
   seven_day: { name: '7d', ms: 7 * 86400_000 },
@@ -128,13 +131,30 @@ export const register: Register = on => {
     return next(e)
   })
 
-  // Footer under each main reply, desktop app only (skipped in a terminal-only session).
   on('turn.complete', async ($, e, next) => {
     const r = await next(e)
     await refresh($)
-    if (e.agentId !== undefined || !(await inApp($))) return r
-    const line = textLine(rows(await read($, limits), await $.clock.now()))
-    return line ? { ...r, text: line } : r
+    if (e.agentId === undefined && r.text.trim()) await update($, lastReply, () => r.text.trim())
+    return r
+  })
+
+  // Usage line drawn inline under the latest reply (desktop app). A turn.complete
+  // note would be folded into "Claude Code notification" there, so draw it here.
+  on('ui.render', { component: 'AssistantMessage' }, async ($, e, next) => {
+    if (e.surface === 'terminal' || e.props.isSummary) return next(e)
+    const block = e.props.text.trim()
+    const last = await read($, lastReply)
+    if (!block || !last || !last.endsWith(block)) return next(e)
+    const rs = rows(await read($, limits), await $.clock.now())
+    if (rs.length === 0) return next(e)
+
+    const { Box, Text } = $.ui.resolve(e)
+    return (
+      <Box flexDirection="column" gap="xs">
+        {await next(e)}
+        <Text dimColor>{textLine(rs)}</Text>
+      </Box>
+    )
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
